@@ -289,6 +289,9 @@ struct _virStorageSource {
 #  define DEV_BSIZE 512
 # endif
 
+virStorageSourcePtr virStorageSourceGetBackingStore(const virStorageSource *src,
+                                                    size_t pos);
+
 int virStorageFileProbeFormat(const char *path, uid_t uid, gid_t gid);
 int virStorageFileProbeFormatFromBuf(const char *path,
                                      char *buf,

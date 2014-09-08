@@ -1798,6 +1798,14 @@ virStorageSourcePoolDefCopy(const virStorageSourcePoolDef *src)
 }
 
 
+virStorageSourcePtr
+virStorageSourceGetBackingStore(const virStorageSource *src,
+                                size_t pos ATTRIBUTE_UNUSED)
+{
+    return src->backingStore;
+}
+
+
 /**
  * virStorageSourcePtr:
  *

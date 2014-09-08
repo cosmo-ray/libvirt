@@ -2066,6 +2066,7 @@ virStorageSourceClear;
 virStorageSourceCopy;
 virStorageSourceFree;
 virStorageSourceGetActualType;
+virStorageSourceGetBackingStore;
 virStorageSourceGetSecurityLabelDef;
 virStorageSourceInitChainElement;
 virStorageSourceIsEmpty;
