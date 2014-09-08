@@ -1340,10 +1340,13 @@ virStorageVolDefParseXML(virStoragePoolDefPtr pool,
 
     if ((backingStore = virXPathString("string(./backingStore/path)", ctxt))) {
         virStorageSourcePtr backingStorePtr;
-        if (VIR_ALLOC(ret->target.backingStore) < 0)
+        if (VIR_ALLOC(backingStorePtr) < 0)
             goto error;
 
-        backingStorePtr = virStorageSourceGetBackingStore(&ret->target, 0);
+        if (!virStorageSourceSetBackingStore(&ret->target, backingStorePtr, 0)) {
+            VIR_FREE(backingStorePtr);
+            goto error;
+        }
         backingStorePtr->path = backingStore;
         backingStore = NULL;
 

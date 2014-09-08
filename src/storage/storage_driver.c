@@ -2881,7 +2881,7 @@ virStorageFileGetMetadataRecurse(virStorageSourcePtr src,
         goto cleanup;
     }
 
-    src->backingStore = backingStore;
+    virStorageSourceSetBackingStore(src, backingStore, 0);
     backingStore = NULL;
     ret = 0;
 

@@ -97,10 +97,12 @@ virStorageBackendProbeTarget(virStorageSourcePtr target,
         goto cleanup;
 
     if (meta->backingStoreRaw) {
-        backingStore = virStorageSourceGetBackingStore(target, 0);
-        if (!(backingStore = virStorageSourceNewFromBacking(meta)))
+        if (!virStorageSourceSetBackingStore(target,
+                                             virStorageSourceNewFromBacking(meta),
+                                             0))
             goto cleanup;
 
+        backingStore = virStorageSourceGetBackingStore(target, 0);
         backingStore->format = backingStoreFormat;
 
         /* XXX: Remote storage doesn't play nicely with volumes backed by
@@ -112,7 +114,7 @@ virStorageBackendProbeTarget(virStorageSourcePtr target,
             if (VIR_ALLOC(backingStore) < 0)
                 goto cleanup;
 
-            target->backingStore = backingStore;
+            virStorageSourceSetBackingStore(target, backingStore, 0);
             backingStore->type = VIR_STORAGE_TYPE_NETWORK;
             backingStore->path = meta->backingStoreRaw;
             meta->backingStoreRaw = NULL;

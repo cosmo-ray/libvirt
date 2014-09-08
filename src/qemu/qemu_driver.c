@@ -13630,12 +13630,12 @@ qemuDomainSnapshotCreateSingleDiskActive(virQEMUDriverPtr driver,
     /* Update vm in place to match changes.  */
     need_unlink = false;
 
-    newDiskSrc->backingStore = disk->src;
+    virStorageSourceSetBackingStore(newDiskSrc, disk->src, 0);
     disk->src = newDiskSrc;
     newDiskSrc = NULL;
 
     if (persistDisk) {
-        persistDiskSrc->backingStore = persistDisk->src;
+        virStorageSourceSetBackingStore(persistDiskSrc, persistDisk->src, 0);
         persistDisk->src = persistDiskSrc;
         persistDiskSrc = NULL;
     }
@@ -13679,13 +13679,13 @@ qemuDomainSnapshotUndoSingleDiskActive(virQEMUDriverPtr driver,
     /* Update vm in place to match changes. */
     tmp = disk->src;
     disk->src = virStorageSourceGetBackingStore(tmp, 0);
-    tmp->backingStore = NULL;
+    virStorageSourceSetBackingStore(tmp, NULL, 0);
     virStorageSourceFree(tmp);
 
     if (persistDisk) {
         tmp = persistDisk->src;
         persistDisk->src = virStorageSourceGetBackingStore(tmp, 0);
-        tmp->backingStore = NULL;
+        virStorageSourceSetBackingStore(tmp, NULL, 0);
         virStorageSourceFree(tmp);
     }
 }
