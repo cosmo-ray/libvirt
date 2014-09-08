@@ -1048,7 +1048,7 @@ static int createFileDir(virConnectPtr conn ATTRIBUTE_UNUSED,
         return -1;
     }
 
-    if (vol->target.backingStore) {
+    if (vol->target.backingStores) {
         virReportError(VIR_ERR_NO_SUPPORT, "%s",
                        _("backing storage not supported for directories volumes"));
         return -1;
