@@ -270,7 +270,8 @@ struct _virStorageSource {
     bool shared;
 
     /* backing chain of the storage source */
-    virStorageSourcePtr backingStore;
+    virStorageSourcePtr *backingStores;
+    size_t      nBackingStores;
 
     /* metadata for storage driver access to remote and local volumes */
     virStorageDriverDataPtr drv;
