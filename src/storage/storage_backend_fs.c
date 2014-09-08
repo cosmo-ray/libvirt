@@ -70,6 +70,7 @@ virStorageBackendProbeTarget(virStorageSourcePtr target,
     int ret = -1;
     int rc;
     virStorageSourcePtr meta = NULL;
+    virStorageSourcePtr backingStore;
     struct stat sb;
 
     if (encryption)
@@ -96,40 +97,42 @@ virStorageBackendProbeTarget(virStorageSourcePtr target,
         goto cleanup;
 
     if (meta->backingStoreRaw) {
-        if (!(target->backingStore = virStorageSourceNewFromBacking(meta)))
+        backingStore = virStorageSourceGetBackingStore(target, 0);
+        if (!(backingStore = virStorageSourceNewFromBacking(meta)))
             goto cleanup;
 
-        target->backingStore->format = backingStoreFormat;
+        backingStore->format = backingStoreFormat;
 
         /* XXX: Remote storage doesn't play nicely with volumes backed by
          * remote storage. To avoid trouble, just fake the backing store is RAW
          * and put the string from the metadata as the path of the target. */
-        if (!virStorageSourceIsLocalStorage(target->backingStore)) {
-            virStorageSourceFree(target->backingStore);
+        if (!virStorageSourceIsLocalStorage(backingStore)) {
+            virStorageSourceFree(backingStore);
 
-            if (VIR_ALLOC(target->backingStore) < 0)
+            if (VIR_ALLOC(backingStore) < 0)
                 goto cleanup;
 
-            target->backingStore->type = VIR_STORAGE_TYPE_NETWORK;
-            target->backingStore->path = meta->backingStoreRaw;
+            target->backingStore = backingStore;
+            backingStore->type = VIR_STORAGE_TYPE_NETWORK;
+            backingStore->path = meta->backingStoreRaw;
             meta->backingStoreRaw = NULL;
-            target->backingStore->format = VIR_STORAGE_FILE_RAW;
+            backingStore->format = VIR_STORAGE_FILE_RAW;
         }
 
-        if (target->backingStore->format == VIR_STORAGE_FILE_AUTO) {
-            if ((rc = virStorageFileProbeFormat(target->backingStore->path,
+        if (backingStore->format == VIR_STORAGE_FILE_AUTO) {
+            if ((rc = virStorageFileProbeFormat(backingStore->path,
                                                 -1, -1)) < 0) {
                 /* If the backing file is currently unavailable or is
                  * accessed via remote protocol only log an error, fake the
                  * format as RAW and continue. Returning -1 here would
                  * disable the whole storage pool, making it unavailable for
                  * even maintenance. */
-                target->backingStore->format = VIR_STORAGE_FILE_RAW;
+                backingStore->format = VIR_STORAGE_FILE_RAW;
                 virReportError(VIR_ERR_INTERNAL_ERROR,
                                _("cannot probe backing volume format: %s"),
-                               target->backingStore->path);
+                               backingStore->path);
             } else {
-                target->backingStore->format = rc;
+                backingStore->format = rc;
             }
         }
     }
@@ -900,8 +903,8 @@ virStorageBackendFileSystemRefresh(virConnectPtr conn ATTRIBUTE_UNUSED,
         if (vol->target.format == VIR_STORAGE_FILE_DIR)
             vol->type = VIR_STORAGE_VOL_DIR;
 
-        if (vol->target.backingStore) {
-            ignore_value(virStorageBackendUpdateVolTargetInfo(vol->target.backingStore,
+        if (virStorageSourceGetBackingStore(&(vol->target), 0)) {
+            ignore_value(virStorageBackendUpdateVolTargetInfo(virStorageSourceGetBackingStore(&(vol->target), 0),
                                                               true, false,
                                                               VIR_STORAGE_VOL_OPEN_DEFAULT));
             /* If this failed, the backing file is currently unavailable,

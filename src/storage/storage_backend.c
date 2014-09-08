@@ -875,6 +875,7 @@ virStorageBackendCreateQemuImgCmd(virConnectPtr conn,
     char *opts = NULL;
     bool convert = false;
     bool backing = false;
+    virStorageSourcePtr backingStore;
 
     virCheckFlags(VIR_STORAGE_VOL_CREATE_PREALLOC_METADATA, NULL);
 
@@ -926,11 +927,12 @@ virStorageBackendCreateQemuImgCmd(virConnectPtr conn,
 
     }
 
-    if (vol->target.backingStore) {
+    backingStore = virStorageSourceGetBackingStore(&vol->target, 0);
+    if (backingStore) {
         int accessRetCode = -1;
         char *absolutePath = NULL;
 
-        backingType = virStorageFileFormatTypeToString(vol->target.backingStore->format);
+        backingType = virStorageFileFormatTypeToString(backingStore->format);
 
         if (preallocate) {
             virReportError(VIR_ERR_CONFIG_UNSUPPORTED, "%s",
@@ -943,9 +945,9 @@ virStorageBackendCreateQemuImgCmd(virConnectPtr conn,
          * backing store, not really sure what use it serves though, and it
          * may cause issues with lvm. Untested essentially.
          */
-        if (inputvol && inputvol->target.backingStore &&
-            STRNEQ_NULLABLE(inputvol->target.backingStore->path,
-                            vol->target.backingStore->path)) {
+        if (inputvol && virStorageSourceGetBackingStore(&(inputvol->target), 0) &&
+            STRNEQ_NULLABLE(virStorageSourceGetBackingStore(&(inputvol->target), 0)->path,
+                            backingStore->path)) {
             virReportError(VIR_ERR_INTERNAL_ERROR, "%s",
                            _("a different backing store cannot be specified."));
             return NULL;
@@ -954,24 +956,24 @@ virStorageBackendCreateQemuImgCmd(virConnectPtr conn,
         if (backingType == NULL) {
             virReportError(VIR_ERR_INTERNAL_ERROR,
                            _("unknown storage vol backing store type %d"),
-                           vol->target.backingStore->format);
+                           backingStore->format);
             return NULL;
         }
 
         /* Convert relative backing store paths to absolute paths for access
          * validation.
          */
-        if ('/' != *(vol->target.backingStore->path) &&
+        if ('/' != *(backingStore->path) &&
             virAsprintf(&absolutePath, "%s/%s", pool->def->target.path,
-                        vol->target.backingStore->path) < 0)
+                        backingStore->path) < 0)
             return NULL;
         accessRetCode = access(absolutePath ? absolutePath
-                               : vol->target.backingStore->path, R_OK);
+                               : backingStore->path, R_OK);
         VIR_FREE(absolutePath);
         if (accessRetCode != 0) {
             virReportSystemError(errno,
                                  _("inaccessible backing store volume %s"),
-                                 vol->target.backingStore->path);
+                                 backingStore->path);
             return NULL;
         }
     }
@@ -1011,8 +1013,9 @@ virStorageBackendCreateQemuImgCmd(virConnectPtr conn,
 
     cmd = virCommandNew(create_tool);
 
+    backingStore = virStorageSourceGetBackingStore(&(vol->target), 0);
     convert = !!inputvol;
-    backing = !inputvol && vol->target.backingStore;
+    backing = !inputvol && backingStore;
 
     if (convert)
         virCommandAddArgList(cmd, "convert", "-f", inputType, "-O", type, NULL);
@@ -1020,7 +1023,7 @@ virStorageBackendCreateQemuImgCmd(virConnectPtr conn,
         virCommandAddArgList(cmd, "create", "-f", type, NULL);
 
     if (backing)
-        virCommandAddArgList(cmd, "-b", vol->target.backingStore->path, NULL);
+        virCommandAddArgList(cmd, "-b", backingStore->path, NULL);
 
     if (imgformat >= QEMU_IMG_BACKING_FORMAT_OPTIONS) {
         if (vol->target.format == VIR_STORAGE_FILE_QCOW2 && !compat &&
@@ -1139,7 +1142,7 @@ virStorageBackendCreateQcowCreate(virConnectPtr conn ATTRIBUTE_UNUSED,
                        vol->target.format);
         return -1;
     }
-    if (vol->target.backingStore != NULL) {
+    if (virStorageSourceGetBackingStore(&(vol->target), 0) != NULL) {
         virReportError(VIR_ERR_CONFIG_UNSUPPORTED, "%s",
                        _("copy-on-write image not supported with "
                          "qcow-create"));
@@ -1548,8 +1551,8 @@ virStorageBackendUpdateVolInfo(virStorageVolDefPtr vol,
                                                     openflags)) < 0)
         return ret;
 
-    if (vol->target.backingStore &&
-        (ret = virStorageBackendUpdateVolTargetInfo(vol->target.backingStore,
+    if (virStorageSourceGetBackingStore(&(vol->target), 0) &&
+        (ret = virStorageBackendUpdateVolTargetInfo(virStorageSourceGetBackingStore(&(vol->target), 0),
                                                     updateCapacity,
                                                     withBlockVolFormat,
                                                     VIR_STORAGE_VOL_OPEN_DEFAULT |

@@ -247,6 +247,7 @@ virStorageBackendGlusterRefreshVol(virStorageBackendGlusterStatePtr state,
     char *header = NULL;
     ssize_t len = VIR_STORAGE_MAX_HEADER;
     int backingFormat;
+    virStorageSourcePtr backingStore;
 
     *volptr = NULL;
 
@@ -302,13 +303,14 @@ virStorageBackendGlusterRefreshVol(virStorageBackendGlusterStatePtr state,
     if (meta->backingStoreRaw) {
         if (VIR_ALLOC(vol->target.backingStore) < 0)
             goto cleanup;
+        backingStore = virStorageSourceGetBackingStore(&vol->target, 0);
 
-        vol->target.backingStore->path = meta->backingStoreRaw;
+        backingStore->path = meta->backingStoreRaw;
 
         if (backingFormat < 0)
-            vol->target.backingStore->format = VIR_STORAGE_FILE_RAW;
+            backingStore->format = VIR_STORAGE_FILE_RAW;
         else
-            vol->target.backingStore->format = backingFormat;
+            backingStore->format = backingFormat;
         meta->backingStoreRaw = NULL;
     }
 

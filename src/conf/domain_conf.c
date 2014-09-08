@@ -17054,7 +17054,7 @@ virDomainDiskBackingStoreFormat(virBufferPtr buf,
     /* We currently don't output seclabels for backing chain element */
     if (virDomainDiskSourceFormatInternal(buf, backingStore, 0, 0, true) < 0 ||
         virDomainDiskBackingStoreFormat(buf,
-                                        backingStore->backingStore,
+                                        virStorageSourceGetBackingStore(backingStore, 0),
                                         backingStore->backingStoreRaw,
                                         idx + 1) < 0)
         return -1;
@@ -17176,7 +17176,8 @@ virDomainDiskDefFormat(virBufferPtr buf,
     /* Don't format backingStore to inactive XMLs until the code for
      * persistent storage of backing chains is ready. */
     if (!(flags & VIR_DOMAIN_DEF_FORMAT_INACTIVE) &&
-        virDomainDiskBackingStoreFormat(buf, def->src->backingStore,
+        virDomainDiskBackingStoreFormat(buf,
+                                        virStorageSourceGetBackingStore(def->src, 0),
                                         def->src->backingStoreRaw, 1) < 0)
         return -1;
 
@@ -21254,7 +21255,7 @@ virDomainDiskDefForeachPath(virDomainDiskDefPtr disk,
         }
     }
 
-    for (tmp = disk->src; tmp; tmp = tmp->backingStore) {
+    for (tmp = disk->src; tmp; tmp = virStorageSourceGetBackingStore(tmp, 0)) {
         int actualType = virStorageSourceGetActualType(tmp);
         /* execute the callback only for local storage */
         if (actualType != VIR_STORAGE_TYPE_NETWORK &&
