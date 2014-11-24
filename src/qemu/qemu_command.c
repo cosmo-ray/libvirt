@@ -3479,6 +3479,91 @@ qemuCheckDiskConfig(virDomainDiskDefPtr disk)
     return -1;
 }
 
+static bool
+qemuBuildQuorumFileSourceStr(virConnectPtr conn,
+                                      virStorageSourcePtr src,
+                                      virBuffer *opt,
+                                      const char *toAppend)
+{
+    char *source = NULL;
+    int actualType = virStorageSourceGetActualType(src);
+
+    if (qemuGetDriveSourceString(src, conn, &source) < 0)
+        return false;
+
+    if (source) {
+
+        virBufferStrcat(opt, "," , toAppend , "filename=", NULL);
+
+        if (actualType == VIR_STORAGE_TYPE_DIR) {
+            virReportError(VIR_ERR_INTERNAL_ERROR,
+                           _("unsupported disk driver type for '%s'"),
+                           virStorageFileFormatTypeToString(src->format));
+            return false;
+        }
+        virBufferAdd(opt, source, -1);
+    }
+
+    return true;
+}
+
+
+static bool
+qemuBuildQuorumStr(virConnectPtr conn,
+                   virDomainDiskDefPtr disk,
+                   virStorageSourcePtr src,
+                   virBuffer *opt,
+                   const char *toAppend)
+{
+    char *tmp = NULL;
+    int ret;
+    virStorageSourcePtr backingStore;
+    size_t i;
+
+    if (!src->threshold) {
+        virReportError(VIR_ERR_INTERNAL_ERROR, "%s",
+                       _("threshold missing in the quorum configuration"));
+        return false;
+    }
+    if (src->nBackingStores < 2) {
+        virReportError(VIR_ERR_INTERNAL_ERROR, "%s",
+                       _("a quorum must have at last 2 children"));
+        return false;
+    }
+    if (src->threshold > src->nBackingStores) {
+        virReportError(VIR_ERR_INTERNAL_ERROR, "%s",
+                       _("threshold must not exceed the number of children"));
+        return false;
+    }
+    virBufferAsprintf(opt, ",%svote-threshold=%lu",
+                      toAppend, src->threshold);
+    for (i = 0;  i < src->nBackingStores; ++i) {
+        backingStore = virStorageSourceGetBackingStore(src, i);
+        ret = virAsprintf(&tmp, "%schildren.%lu.file.", toAppend, i);
+        if (ret < 0)
+            return false;
+
+        virBufferAsprintf(opt, ",%schildren.%lu.driver=%s",
+                          toAppend, i,
+                          virStorageFileFormatTypeToString(backingStore->format));
+
+        if (qemuBuildQuorumFileSourceStr(conn, backingStore, opt, tmp) == false)
+            goto error;
+
+        /* This operation avoid us to made another copy */
+        tmp[ret - sizeof("file")] = '\0';
+        if (backingStore->type == VIR_STORAGE_TYPE_QUORUM) {
+            if (!qemuBuildQuorumStr(conn, disk, backingStore, opt, tmp))
+                goto error;
+        }
+        VIR_FREE(tmp);
+    }
+    return true;
+ error:
+    VIR_FREE(tmp);
+    return false;
+}
+
 
 /* Qemu 1.2 and later have a binary flag -enable-fips that must be
  * used for VNC auth to obey FIPS settings; but the flag only
@@ -3950,6 +4035,11 @@ qemuBuildDriveStr(virConnectPtr conn,
     if (disk->blkdeviotune.size_iops_sec) {
         virBufferAsprintf(&opt, ",iops_size=%llu",
                           disk->blkdeviotune.size_iops_sec);
+    }
+
+    if (actualType == VIR_STORAGE_TYPE_QUORUM) {
+        if (!qemuBuildQuorumStr(conn, disk, disk->src, &opt, ""))
+            goto error;
     }
 
     if (virBufferCheckError(&opt) < 0)
