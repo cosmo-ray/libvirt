@@ -54,7 +54,8 @@ VIR_ENUM_IMPL(virStorage, VIR_STORAGE_TYPE_LAST,
               "block",
               "dir",
               "network",
-              "volume")
+              "volume",
+              "quorum")
 
 VIR_ENUM_IMPL(virStorageFileFormat,
               VIR_STORAGE_FILE_LAST,
@@ -63,7 +64,7 @@ VIR_ENUM_IMPL(virStorageFileFormat,
               "cloop", "dmg", "iso",
               "vpc", "vdi",
               /* Not direct file formats, but used for various drivers */
-              "fat", "vhd", "ploop",
+              "fat", "vhd", "ploop", "quorum",
               /* Formats with backing file below here */
               "cow", "qcow", "qcow2", "qed", "vmdk")
 
@@ -1875,6 +1876,7 @@ virStorageSourceCopy(const virStorageSource *src,
                      bool backingChain)
 {
     virStorageSourcePtr ret = NULL;
+    size_t i;
 
     if (VIR_ALLOC(ret) < 0)
         return NULL;
@@ -1887,6 +1889,8 @@ virStorageSourceCopy(const virStorageSource *src,
     ret->physical = src->physical;
     ret->readonly = src->readonly;
     ret->shared = src->shared;
+    ret->nBackingStores = src->nBackingStores;
+    ret->threshold = src->threshold;
 
     /* storage driver metadata are not copied */
     ret->drv = NULL;
@@ -1935,12 +1939,14 @@ virStorageSourceCopy(const virStorageSource *src,
         !(ret->auth = virStorageAuthDefCopy(src->auth)))
         goto error;
 
-    if (backingChain && virStorageSourceGetBackingStore(src, 0)) {
-        if (!virStorageSourceSetBackingStore(ret,
-                                             virStorageSourceCopy(virStorageSourceGetBackingStore(src, 0),
-                                                                  true),
-                                             0))
-            goto error;
+    for (i = 0; i < src->nBackingStores; ++i) {
+        if (backingChain && virStorageSourceGetBackingStore(src, i)) {
+            if (!virStorageSourceSetBackingStore(ret,
+                                                 virStorageSourceCopy(virStorageSourceGetBackingStore(src, i),
+                                                                      true),
+                                                 0))
+                goto error;
+        }
     }
 
     return ret;
@@ -2024,6 +2030,9 @@ virStorageSourceIsLocalStorage(virStorageSourcePtr src)
     case VIR_STORAGE_TYPE_FILE:
     case VIR_STORAGE_TYPE_BLOCK:
     case VIR_STORAGE_TYPE_DIR:
+        /* A quorum is actually both, but we consider it as local
+         * because it keep us to add a lot of exeption in the code*/
+    case VIR_STORAGE_TYPE_QUORUM:
         return true;
 
     case VIR_STORAGE_TYPE_NETWORK:

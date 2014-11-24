@@ -20,6 +20,7 @@
             <value>dir</value>
             <value>network</value>
             <value>netdir</value>
+            <value>quorum</value>
           </choice>
         </attribute>
       </optional>

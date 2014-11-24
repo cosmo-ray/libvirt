@@ -1283,6 +1283,40 @@
     </attribute>
   </define>
 
+  <define name='diskDevice'>
+    <choice>
+      <group>
+        <optional>
+          <attribute name="device">
+            <choice>
+              <value>floppy</value>
+              <value>disk</value>
+              <value>cdrom</value>
+            </choice>
+          </attribute>
+        </optional>
+      </group>
+      <group>
+        <attribute name="device">
+          <choice>
+            <value>lun</value>
+          </choice>
+        </attribute>
+        <optional>
+          <ref name="rawIO"/>
+        </optional>
+        <optional>
+          <attribute name="sgio">
+            <choice>
+              <value>filtered</value>
+              <value>unfiltered</value>
+            </choice>
+          </attribute>
+        </optional>
+      </group>
+    </choice>
+  </define>
+
   <!--
       A disk description can be either of type file or block
       The name of the attribute on the source element depends on the type
@@ -1290,37 +1324,7 @@
     -->
   <define name="disk">
     <element name="disk">
-      <choice>
-        <group>
-          <optional>
-            <attribute name="device">
-              <choice>
-                <value>floppy</value>
-                <value>disk</value>
-                <value>cdrom</value>
-              </choice>
-            </attribute>
-          </optional>
-        </group>
-        <group>
-          <attribute name="device">
-            <choice>
-              <value>lun</value>
-            </choice>
-          </attribute>
-          <optional>
-            <ref name="rawIO"/>
-          </optional>
-          <optional>
-            <attribute name="sgio">
-              <choice>
-                <value>filtered</value>
-                <value>unfiltered</value>
-              </choice>
-            </attribute>
-          </optional>
-        </group>
-      </choice>
+      <ref name="diskDevice"/>
       <optional>
         <ref name="snapshot"/>
       </optional>
@@ -1332,9 +1336,15 @@
     </element>
   </define>
 
+  <define name="diskBackingStoreArray">
+    <zeroOrMore>
+      <ref name="diskBackingStore"/>
+    </zeroOrMore>
+  </define>
+
   <define name="diskBackingChain">
     <choice>
-      <ref name="diskBackingStore"/>
+      <ref name="diskBackingStoreArray"/>
       <ref name="diskBackingStoreLast"/>
     </choice>
   </define>
@@ -1345,6 +1355,9 @@
         <ref name="positiveInteger"/>
       </attribute>
       <interleave>
+        <optional>
+          <ref name="diskDevice"/>
+        </optional>
         <ref name="diskSource"/>
         <ref name="diskBackingChain"/>
         <ref name="diskFormat"/>
@@ -1376,8 +1389,21 @@
       <ref name="diskSourceDir"/>
       <ref name="diskSourceNetwork"/>
       <ref name="diskSourceVolume"/>
+      <ref name="diskSourceQuorum"/>
     </choice>
   </define>
+
+  <define name="diskSourceQuorum">
+    <optional>
+      <attribute name="type">
+        <value>quorum</value>
+      </attribute>
+      <attribute name="threshold">
+        <ref name="unsignedInt"/>
+      </attribute>
+    </optional>
+  </define>
+
 
   <define name="diskSourceFile">
     <optional>

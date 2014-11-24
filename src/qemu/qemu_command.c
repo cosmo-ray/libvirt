@@ -3277,6 +3277,7 @@ qemuGetDriveSourceString(virStorageSourcePtr src,
             goto cleanup;
         break;
 
+    case VIR_STORAGE_TYPE_QUORUM:
     case VIR_STORAGE_TYPE_VOLUME:
     case VIR_STORAGE_TYPE_NONE:
     case VIR_STORAGE_TYPE_LAST:
