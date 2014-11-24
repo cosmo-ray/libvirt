@@ -5952,20 +5952,56 @@ virDomainDiskSourceParse(xmlNodePtr node,
 }
 
 
+static bool
+virDomainDiskThresholdParse(virStorageSourcePtr src,
+                            xmlNodePtr node)
+{
+    char *threshold = virXMLPropString(node, "threshold");
+    int ret;
+
+    if (!threshold) {
+        virReportError(VIR_ERR_XML_ERROR,
+                       "%s", _("missing threshold in quorum"));
+        return false;
+    }
+    ret = virStrToLong_ul(threshold, NULL, 10, &src->threshold);
+    if (ret < 0 || src->threshold < 2) {
+        virReportError(VIR_ERR_CONFIG_UNSUPPORTED,
+                       _("unexpected threshold %s"),
+                       "threshold must be a decimal number superior to 2 "
+                         "and inferior to the number of children");
+        VIR_FREE(threshold);
+        return false;
+    }
+    VIR_FREE(threshold);
+    return true;
+}
+
+
 static int
 virDomainDiskBackingStoreParse(xmlXPathContextPtr ctxt,
-                               virStorageSourcePtr src)
+                               virStorageSourcePtr src,
+                               xmlNodePtr node,
+                               size_t pos)
 {
     virStorageSourcePtr backingStore = NULL;
     xmlNodePtr save_ctxt = ctxt->node;
-    xmlNodePtr source;
+    xmlNodePtr source = NULL;
     char *type = NULL;
     char *format = NULL;
     int ret = -1;
 
-    if (!(ctxt->node = virXPathNode("./backingStore[*]", ctxt))) {
-        ret = 0;
-        goto cleanup;
+    if (src->type == VIR_STORAGE_TYPE_QUORUM) {
+        if (!node) {
+            ret = 0;
+            goto cleanup;
+        }
+        ctxt->node = node;
+    } else {
+        if (!(ctxt->node = virXPathNode("./backingStore[*]", ctxt))) {
+            ret = 0;
+            goto cleanup;
+        }
     }
 
     if (VIR_ALLOC(backingStore) < 0)
@@ -5997,6 +6033,25 @@ virDomainDiskBackingStoreParse(xmlXPathContextPtr ctxt,
         goto cleanup;
     }
 
+    if (backingStore->type == VIR_STORAGE_TYPE_QUORUM) {
+        xmlNodePtr cur = NULL;
+
+        if (!virDomainDiskThresholdParse(backingStore, node))
+            goto cleanup;
+
+        for (cur = node->children; cur != NULL; cur = cur->next) {
+            if (xmlStrEqual(cur->name, BAD_CAST "backingStore")) {
+                if ((virDomainDiskBackingStoreParse(ctxt,
+                                                    backingStore,
+                                                    cur,
+                                                    backingStore->nBackingStores) < 0)) {
+                    goto cleanup;
+                }
+            }
+        }
+        goto exit;
+    }
+
     if (!(source = virXPathNode("./source", ctxt))) {
         virReportError(VIR_ERR_XML_ERROR, "%s",
                        _("missing disk backing store source"));
@@ -6004,10 +6059,11 @@ virDomainDiskBackingStoreParse(xmlXPathContextPtr ctxt,
     }
 
     if (virDomainDiskSourceParse(source, ctxt, backingStore) < 0 ||
-        virDomainDiskBackingStoreParse(ctxt, backingStore) < 0)
+        virDomainDiskBackingStoreParse(ctxt, backingStore, NULL, 0) < 0)
         goto cleanup;
 
-    if (!virStorageSourceSetBackingStore(src, backingStore, 0))
+ exit:
+    if (!virStorageSourceSetBackingStore(src, backingStore, pos))
         goto cleanup;
     ret = 0;
 
@@ -6019,7 +6075,6 @@ virDomainDiskBackingStoreParse(xmlXPathContextPtr ctxt,
     ctxt->node = save_ctxt;
     return ret;
 }
-
 
 #define VENDOR_LEN  8
 #define PRODUCT_LEN 16
@@ -6518,6 +6573,10 @@ virDomainDiskDefParseXML(virDomainXMLOptionPtr xmlopt,
                 }
             } else if (xmlStrEqual(cur->name, BAD_CAST "boot")) {
                 /* boot is parsed as part of virDomainDeviceInfoParseXML */
+            } else if (xmlStrEqual(cur->name, BAD_CAST "backingStore")) {
+                if (virDomainDiskBackingStoreParse(ctxt, def->src, cur,
+                                                   def->src->nBackingStores) < 0)
+                    goto error;
             }
         }
         cur = cur->next;
@@ -6541,12 +6600,19 @@ virDomainDiskDefParseXML(virDomainXMLOptionPtr xmlopt,
         def->device = VIR_DOMAIN_DISK_DEVICE_DISK;
     }
 
+    if (def->src->type == VIR_STORAGE_TYPE_QUORUM &&
+        !virDomainDiskThresholdParse(def->src, node))
+        goto error;
+
+    snapshot = virXMLPropString(node, "snapshot");
+
     /* Only CDROM and Floppy devices are allowed missing source path
      * to indicate no media present. LUN is for raw access CD-ROMs
      * that are not attached to a physical device presently */
     if (virStorageSourceIsEmpty(def->src) &&
         (def->device == VIR_DOMAIN_DISK_DEVICE_DISK ||
-         (flags & VIR_DOMAIN_DEF_PARSE_DISK_SOURCE))) {
+         (flags & VIR_DOMAIN_DEF_PARSE_DISK_SOURCE)) &&
+        def->src->type != VIR_STORAGE_TYPE_QUORUM) {
         virReportError(VIR_ERR_NO_SOURCE,
                        target ? "%s" : NULL, target);
         goto error;
@@ -6891,9 +6957,6 @@ virDomainDiskDefParseXML(virDomainXMLOptionPtr xmlopt,
     if (!(flags & VIR_DOMAIN_DEF_PARSE_DISK_SOURCE)) {
         if (def->info.type == VIR_DOMAIN_DEVICE_ADDRESS_TYPE_NONE
             && virDomainDiskDefAssignAddress(xmlopt, def) < 0)
-            goto error;
-
-        if (virDomainDiskBackingStoreParse(ctxt, def->src) < 0)
             goto error;
     }
 
@@ -17717,12 +17780,14 @@ virDomainDiskSourceFormat(virBufferPtr buf,
 
 static int
 virDomainDiskBackingStoreFormat(virBufferPtr buf,
-                                virStorageSourcePtr backingStore,
-                                const char *backingStoreRaw,
+                                virStorageSourcePtr src,
                                 unsigned int idx)
 {
+    const char *backingStoreRaw = src->backingStoreRaw;
+    virStorageSourcePtr backingStore = virStorageSourceGetBackingStore(src, 0);
     const char *type;
     const char *format;
+    size_t i = 0;
 
     if (!backingStore) {
         if (!backingStoreRaw)
@@ -17730,37 +17795,43 @@ virDomainDiskBackingStoreFormat(virBufferPtr buf,
         return 0;
     }
 
-    if (!backingStore->type ||
-        !(type = virStorageTypeToString(backingStore->type))) {
-        virReportError(VIR_ERR_INTERNAL_ERROR,
-                       _("unexpected disk backing store type %d"),
-                       backingStore->type);
-        return -1;
-    }
+    do {
+        backingStore = virStorageSourceGetBackingStore(src, i);
+        if (!backingStore->type ||
+            !(type = virStorageTypeToString(backingStore->type))) {
+            virReportError(VIR_ERR_INTERNAL_ERROR,
+                           _("unexpected disk backing store type %d"),
+                           backingStore->type);
+            return -1;
+        }
 
-    if (backingStore->format <= 0 ||
-        !(format = virStorageFileFormatTypeToString(backingStore->format))) {
-        virReportError(VIR_ERR_INTERNAL_ERROR,
-                       _("unexpected disk backing store format %d"),
-                       backingStore->format);
-        return -1;
-    }
+        if (backingStore->format <= 0 ||
+            !(format = virStorageFileFormatTypeToString(backingStore->format))) {
+            virReportError(VIR_ERR_INTERNAL_ERROR,
+                           _("unexpected disk backing store format %d"),
+                           backingStore->format);
+            return -1;
+        }
 
-    virBufferAsprintf(buf, "<backingStore type='%s' index='%u'>\n",
-                      type, idx);
-    virBufferAdjustIndent(buf, 2);
+        virBufferAsprintf(buf, "<backingStore type='%s' index='%u'",
+                          type, idx);
+        if (backingStore->threshold)
+            virBufferAsprintf(buf, " threshold='%lu'", backingStore->threshold);
+        virBufferAddLit(buf, ">\n");
+        virBufferAdjustIndent(buf, 2);
 
-    virBufferAsprintf(buf, "<format type='%s'/>\n", format);
-    /* We currently don't output seclabels for backing chain element */
-    if (virDomainDiskSourceFormatInternal(buf, backingStore, 0, 0, true) < 0 ||
-        virDomainDiskBackingStoreFormat(buf,
-                                        virStorageSourceGetBackingStore(backingStore, 0),
-                                        backingStore->backingStoreRaw,
-                                        idx + 1) < 0)
-        return -1;
+        virBufferAsprintf(buf, "<format type='%s'/>\n", format);
+        /* We currently don't output seclabels for backing chain element */
+        if (virDomainDiskSourceFormatInternal(buf, backingStore, 0, 0, true) < 0 ||
+            virDomainDiskBackingStoreFormat(buf,
+                                            backingStore,
+                                            idx + 1) < 0)
+            return -1;
 
-    virBufferAdjustIndent(buf, -2);
-    virBufferAddLit(buf, "</backingStore>\n");
+        virBufferAdjustIndent(buf, -2);
+        virBufferAddLit(buf, "</backingStore>\n");
+        ++i;
+    } while (i < src->nBackingStores);
     return 0;
 }
 
@@ -17830,6 +17901,10 @@ virDomainDiskDefFormat(virBufferPtr buf,
           def->src->readonly))
         virBufferAsprintf(buf, " snapshot='%s'",
                           virDomainSnapshotLocationTypeToString(def->snapshot));
+    if (def->src->threshold) {
+        virBufferAsprintf(buf, " threshold='%lu'",
+                          def->src->threshold);
+    }
     virBufferAddLit(buf, ">\n");
     virBufferAdjustIndent(buf, 2);
 
@@ -17875,10 +17950,9 @@ virDomainDiskDefFormat(virBufferPtr buf,
 
     /* Don't format backingStore to inactive XMLs until the code for
      * persistent storage of backing chains is ready. */
-    if (!(flags & VIR_DOMAIN_DEF_FORMAT_INACTIVE) &&
-        virDomainDiskBackingStoreFormat(buf,
-                                        virStorageSourceGetBackingStore(def->src, 0),
-                                        def->src->backingStoreRaw, 1) < 0)
+    if ((!(flags & VIR_DOMAIN_DEF_FORMAT_INACTIVE) ||
+         def->src->type == VIR_STORAGE_TYPE_QUORUM) &&
+        virDomainDiskBackingStoreFormat(buf, def->src, 1) < 0)
         return -1;
 
     virBufferEscapeString(buf, "<backenddomain name='%s'/>\n", def->domain_name);
