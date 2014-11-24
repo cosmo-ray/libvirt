@@ -1878,8 +1878,9 @@
             <dd>
             Valid values are "file", "block",
             "dir" (<span class="since">since 0.7.5</span>),
-            "network" (<span class="since">since 0.8.7</span>), or
-            "volume" (<span class="since">since 1.0.5</span>)
+            "network" (<span class="since">since 0.8.7</span>),
+            "volume" (<span class="since">since 1.0.5</span>), or
+            "quorum" (<span class="since">since 1.2.13</span>)
             and refer to the underlying source for the disk.
             </dd>
           <dt><code>device</code> attribute
@@ -1939,6 +1940,14 @@
             Not all snapshot modes are supported; for example,
             <code>snapshot='yes'</code> with a transient disk generally
             does not make sense.
+            </dd>
+          <dt><code>threshold</code> attribute
+          <span class="since">since 1.2.13</span></dt>
+            <dd>
+            Only use with a quorum disk.
+            Indicate the minimum of positive vote a quorum must have to validate
+            a data to be write. The minimum value is "2". The number of backingStores
+            contain by the quorum must be superior to the threshold.
             </dd>
         </dl>
       </dd>
@@ -2009,6 +2018,11 @@
               LUN's path as it shows up on host (e.g.
               'file=/dev/disk/by-path/ip-example.com:3260-iscsi-iqn.2013-07.com.example:iscsi-pool-lun-1').
               </p>
+              </dd>
+            <dt><code>type='quorum'</code>
+            <span class="since">since 1.2.13</span></dt>
+              <dd>
+              A quorum contain no source element, but a serie of backingStores instead.
               </dd>
           </dl>
         With "file", "block", and "volume", one or more optional
@@ -2149,7 +2163,10 @@
         property, but using existing external files for snapshot or
         block copy operations requires the end user to pre-create the
         file correctly). The following attributes and sub-elements are
-        supported in <code>backingStore</code>:
+        supported in.
+        <span class="since">Since 1.2.15</span>. This elements is used to
+        describe a quorum child.
+        <code>backingStore</code>:
         <dl>
           <dt><code>type</code> attribute</dt>
           <dd>
