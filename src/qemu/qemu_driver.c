@@ -13804,6 +13804,7 @@ qemuDomainSnapshotPrepareDiskExternalBackingInactive(virDomainDiskDefPtr disk)
         }
         break;
 
+    case VIR_STORAGE_TYPE_QUORUM:
     case VIR_STORAGE_TYPE_DIR:
     case VIR_STORAGE_TYPE_VOLUME:
     case VIR_STORAGE_TYPE_NONE:
@@ -13867,6 +13868,7 @@ qemuDomainSnapshotPrepareDiskExternalOverlayActive(virDomainSnapshotDiskDefPtr d
         }
         break;
 
+    case VIR_STORAGE_TYPE_QUORUM:
     case VIR_STORAGE_TYPE_DIR:
     case VIR_STORAGE_TYPE_VOLUME:
     case VIR_STORAGE_TYPE_NONE:
@@ -13891,6 +13893,7 @@ qemuDomainSnapshotPrepareDiskExternalOverlayInactive(virDomainSnapshotDiskDefPtr
     case VIR_STORAGE_TYPE_FILE:
         return 0;
 
+    case VIR_STORAGE_TYPE_QUORUM:
     case VIR_STORAGE_TYPE_NETWORK:
     case VIR_STORAGE_TYPE_DIR:
     case VIR_STORAGE_TYPE_VOLUME:
@@ -14010,6 +14013,7 @@ qemuDomainSnapshotPrepareDiskInternal(virConnectPtr conn,
         }
         break;
 
+    case VIR_STORAGE_TYPE_QUORUM:
     case VIR_STORAGE_TYPE_DIR:
     case VIR_STORAGE_TYPE_VOLUME:
     case VIR_STORAGE_TYPE_NONE:

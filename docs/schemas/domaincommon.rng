@@ -1217,9 +1217,15 @@
     </interleave>
   </define>
 
+  <define name="diskBackingStoreArray">
+    <zeroOrMore>
+      <ref name="diskBackingStore"/>
+    </zeroOrMore>
+  </define>
+
   <define name="diskBackingChain">
     <choice>
-      <ref name="diskBackingStore"/>
+      <ref name="diskBackingStoreArray"/>
       <ref name="diskBackingStoreLast"/>
     </choice>
   </define>
@@ -1261,8 +1267,21 @@
       <ref name="diskSourceDir"/>
       <ref name="diskSourceNetwork"/>
       <ref name="diskSourceVolume"/>
+      <ref name="diskSourceQuorum"/>
     </choice>
   </define>
+
+  <define name="diskSourceQuorum">
+    <optional>
+      <attribute name="type">
+        <value>quorum</value>
+      </attribute>
+      <attribute name="threshold">
+        <ref name="unsignedInt"/>
+      </attribute>
+    </optional>
+  </define>
+
 
   <define name="diskSourceFile">
     <optional>

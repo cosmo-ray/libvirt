@@ -1517,6 +1517,7 @@ qemuMigrationPrecreateDisk(virConnectPtr conn,
 
     case VIR_STORAGE_TYPE_BLOCK:
     case VIR_STORAGE_TYPE_DIR:
+    case VIR_STORAGE_TYPE_QUORUM:
     case VIR_STORAGE_TYPE_NONE:
     case VIR_STORAGE_TYPE_LAST:
         virReportError(VIR_ERR_INTERNAL_ERROR,

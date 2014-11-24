@@ -49,6 +49,7 @@ typedef enum {
     VIR_STORAGE_TYPE_DIR,
     VIR_STORAGE_TYPE_NETWORK,
     VIR_STORAGE_TYPE_VOLUME,
+    VIR_STORAGE_TYPE_QUORUM,
 
     VIR_STORAGE_TYPE_LAST
 } virStorageType;
@@ -73,6 +74,7 @@ typedef enum {
     VIR_STORAGE_FILE_FAT,
     VIR_STORAGE_FILE_VHD,
     VIR_STORAGE_FILE_PLOOP,
+    VIR_STORAGE_FILE_QUORUM,
 
     /* Not a format, but a marker: all formats below this point have
      * libvirt support for following a backing chain */
@@ -272,6 +274,7 @@ struct _virStorageSource {
     /* backing chain of the storage source */
     virStorageSourcePtr *backingStores;
     size_t      nBackingStores;
+    size_t      threshold;
 
     /* metadata for storage driver access to remote and local volumes */
     virStorageDriverDataPtr drv;
