@@ -3567,6 +3567,9 @@ qemuBuildQuorumStr(virConnectPtr conn,
                           toAppend, i,
                           virStorageFileFormatTypeToString(backingStore->format));
 
+        virBufferAsprintf(opt, ",%schildren.%lu.node-name=%s",
+                          toAppend, i, backingStore->nodeName);
+
         if (qemuBuildQuorumFileSourceStr(conn, backingStore, opt, tmp) == false)
             goto error;
 

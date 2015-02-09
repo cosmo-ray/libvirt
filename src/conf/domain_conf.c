@@ -54,6 +54,7 @@
 #include "network_conf.h"
 #include "virtpm.h"
 #include "virstring.h"
+#include "virrandom.h"
 
 #define VIR_FROM_THIS VIR_FROM_DOMAIN
 
@@ -5978,6 +5979,8 @@ virDomainDiskThresholdParse(virStorageSourcePtr src,
 }
 
 
+#define GEN_NODE_NAME_PREFIX    "libvirt"
+#define GEN_NODE_NAME_MAX_LEN   (sizeof(GEN_NODE_NAME_PREFIX) + 8 + 8)
 static int
 virDomainDiskBackingStoreParse(xmlXPathContextPtr ctxt,
                                virStorageSourcePtr src,
@@ -6018,6 +6021,26 @@ virDomainDiskBackingStoreParse(xmlXPathContextPtr ctxt,
         virReportError(VIR_ERR_CONFIG_UNSUPPORTED,
                        _("unknown disk backing store type '%s'"), type);
         goto cleanup;
+    }
+
+    if (src->type == VIR_STORAGE_TYPE_QUORUM) {
+        char *nodeName = NULL;
+
+        if ((nodeName = virXMLPropString(ctxt->node, "nodename"))) {
+            backingStore->nodeName = nodeName;
+        } else {
+            size_t len;
+
+            if (VIR_ALLOC_N(nodeName, GEN_NODE_NAME_MAX_LEN) < 0)
+                goto cleanup;
+            if (snprintf(nodeName, GEN_NODE_NAME_MAX_LEN,
+                         "%s%08x", GEN_NODE_NAME_PREFIX, (int)pos) < 0)
+                goto cleanup;
+            for (len = strlen(nodeName); len < GEN_NODE_NAME_MAX_LEN - 1; ++len)
+                nodeName[len] = virRandomInt('Z' - 'A') + 'A';
+            nodeName[GEN_NODE_NAME_MAX_LEN - 1] = '\0';
+            backingStore->nodeName = nodeName;
+        }
     }
 
     if (!(format = virXPathString("string(./format/@type)", ctxt))) {
@@ -6075,6 +6098,8 @@ virDomainDiskBackingStoreParse(xmlXPathContextPtr ctxt,
     ctxt->node = save_ctxt;
     return ret;
 }
+#undef GEN_NODE_NAME_PREFIX
+#undef GEN_NODE_NAME_MAX_LEN
 
 #define VENDOR_LEN  8
 #define PRODUCT_LEN 16
@@ -17817,6 +17842,8 @@ virDomainDiskBackingStoreFormat(virBufferPtr buf,
                           type, idx);
         if (backingStore->threshold)
             virBufferAsprintf(buf, " threshold='%lu'", backingStore->threshold);
+        if (backingStore->nodeName)
+            virBufferAsprintf(buf, " nodename='%s'", backingStore->nodeName);
         virBufferAddLit(buf, ">\n");
         virBufferAdjustIndent(buf, 2);
 
