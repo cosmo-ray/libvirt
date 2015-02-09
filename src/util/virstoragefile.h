@@ -275,6 +275,7 @@ struct _virStorageSource {
     virStorageSourcePtr *backingStores;
     size_t      nBackingStores;
     size_t      threshold;
+    char        *nodeName;
 
     /* metadata for storage driver access to remote and local volumes */
     virStorageDriverDataPtr drv;

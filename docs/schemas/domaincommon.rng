@@ -1356,6 +1356,11 @@
       </attribute>
       <interleave>
         <optional>
+          <attribute name="nodename">
+            <text/>
+          </attribute>
+        </optional>
+        <optional>
           <ref name="diskDevice"/>
         </optional>
         <ref name="diskSource"/>

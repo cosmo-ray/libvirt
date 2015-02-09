@@ -1939,6 +1939,9 @@ virStorageSourceCopy(const virStorageSource *src,
         !(ret->auth = virStorageAuthDefCopy(src->auth)))
         goto error;
 
+    if (src->nodeName && VIR_STRDUP(ret->nodeName, src->nodeName) < 0)
+        goto error;
+
     for (i = 0; i < src->nBackingStores; ++i) {
         if (backingChain && virStorageSourceGetBackingStore(src, i)) {
             if (!virStorageSourceSetBackingStore(ret,
@@ -2084,6 +2087,7 @@ virStorageSourceBackingStoreClear(virStorageSourcePtr def)
 
     VIR_FREE(def->relPath);
     VIR_FREE(def->backingStoreRaw);
+    VIR_FREE(def->nodeName);
 
     /* recursively free backing chain */
     for (i = 0; i < def->nBackingStores; ++i)

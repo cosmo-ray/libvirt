@@ -2146,6 +2146,13 @@
             <code>vda[2]</code> refers to the backing store with
             <code>index='2'</code> of the disk with <code>vda</code> target.
           </dd>
+          <dt><code>nodename</code> attribute
+          <span class="since">since 1.2.13</span></dt>
+          <dd>
+            When the backing store is a quorum child, we can use this attribute
+            to define the node-name of a child. If this atribute is undefine,
+            a random nodename is generate.
+          </dd>
           <dt><code>format</code> sub-element</dt>
           <dd>
             The <code>format</code> element contains <code>type</code>
