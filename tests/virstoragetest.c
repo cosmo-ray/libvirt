@@ -583,9 +583,9 @@ testPathRelativePrepare(void)
 
     for (i = 0; i < ARRAY_CARDINALITY(backingchain); i++) {
         if (i < ARRAY_CARDINALITY(backingchain) - 1)
-            backingchain[i].backingStore = &backingchain[i + 1];
+            virStorageSourceSetBackingStore(&backingchain[i], &backingchain[i + 1], 0);
         else
-            backingchain[i].backingStore = NULL;
+            virStorageSourceSetBackingStore(&backingchain[i], NULL, 0);
 
         backingchain[i].relPath = NULL;
     }

@@ -301,9 +301,10 @@ virStorageBackendGlusterRefreshVol(virStorageBackendGlusterStatePtr state,
         goto cleanup;
 
     if (meta->backingStoreRaw) {
-        if (VIR_ALLOC(vol->target.backingStore) < 0)
+        if (VIR_ALLOC(backingStore) < 0)
             goto cleanup;
-        backingStore = virStorageSourceGetBackingStore(&vol->target, 0);
+        if (!virStorageSourceSetBackingStore(&vol->target, backingStore, 0))
+            goto error;
 
         backingStore->path = meta->backingStoreRaw;
 

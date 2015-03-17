@@ -1254,6 +1254,7 @@ virStorageVolDefParseXML(virStoragePoolDefPtr pool,
     char *capacity = NULL;
     char *unit = NULL;
     char *backingStore = NULL;
+    virStorageSourcePtr backingStorePtr;
     xmlNodePtr node;
     xmlNodePtr *nodes = NULL;
     size_t i;
@@ -1290,20 +1291,22 @@ virStorageVolDefParseXML(virStoragePoolDefPtr pool,
     }
 
     if ((backingStore = virXPathString("string(./backingStore/path)", ctxt))) {
-        if (VIR_ALLOC(ret->target.backingStore) < 0)
+        if (VIR_ALLOC(backingStorePtr) < 0)
             goto error;
 
-        ret->target.backingStore->path = backingStore;
+        if (!virStorageSourceSetBackingStore(&ret->target, backingStorePtr, 0))
+            goto error;
+        backingStorePtr->path = backingStore;
         backingStore = NULL;
 
         if (options->formatFromString) {
             char *format = virXPathString("string(./backingStore/format/@type)", ctxt);
             if (format == NULL)
-                ret->target.backingStore->format = options->defaultFormat;
+                backingStorePtr->format = options->defaultFormat;
             else
-                ret->target.backingStore->format = (options->formatFromString)(format);
+                backingStorePtr->format = (options->formatFromString)(format);
 
-            if (ret->target.backingStore->format < 0) {
+            if (backingStorePtr->format < 0) {
                 virReportError(VIR_ERR_CONFIG_UNSUPPORTED,
                                _("unknown volume format type %s"), format);
                 VIR_FREE(format);
@@ -1312,9 +1315,9 @@ virStorageVolDefParseXML(virStoragePoolDefPtr pool,
             VIR_FREE(format);
         }
 
-        if (VIR_ALLOC(ret->target.backingStore->perms) < 0)
+        if (VIR_ALLOC(backingStorePtr->perms) < 0)
             goto error;
-        if (virStorageDefParsePerms(ctxt, ret->target.backingStore->perms,
+        if (virStorageDefParsePerms(ctxt, backingStorePtr->perms,
                                     "./backingStore/permissions",
                                     DEFAULT_VOL_PERM_MODE) < 0)
             goto error;

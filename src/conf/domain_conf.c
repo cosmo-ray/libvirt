@@ -6006,7 +6006,8 @@ virDomainDiskBackingStoreParse(xmlXPathContextPtr ctxt,
         virDomainDiskBackingStoreParse(ctxt, backingStore) < 0)
         goto cleanup;
 
-    src->backingStore = backingStore;
+    if (!virStorageSourceSetBackingStore(src, backingStore, 0))
+        goto cleanup;
     ret = 0;
 
  cleanup:

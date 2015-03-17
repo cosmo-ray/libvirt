@@ -88,6 +88,7 @@ virStorageBackendLogicalMakeVol(char **const groups,
     size_t i;
     int err, nextents, nvars, ret = -1;
     const char *attrs = groups[9];
+    virStorageSourcePtr backingStore;
 
     /* Skip inactive volume */
     if (attrs[4] != 'a')
@@ -148,14 +149,16 @@ virStorageBackendLogicalMakeVol(char **const groups,
      *  lv is created with "--virtualsize").
      */
     if (groups[1] && !STREQ(groups[1], "") && (groups[1][0] != '[')) {
-        if (VIR_ALLOC(vol->target.backingStore) < 0)
+        if (VIR_ALLOC(backingStore) < 0)
             goto cleanup;
 
-        if (virAsprintf(&virStorageSourceGetBackingStore(&vol->target, 0)->path, "%s/%s",
+        if (!virStorageSourceSetBackingStore(&vol->target, backingStore, 0))
+            goto cleanup;
+        if (virAsprintf(&backingStore->path, "%s/%s",
                         pool->def->target.path, groups[1]) < 0)
             goto cleanup;
 
-        virStorageSourceGetBackingStore(&vol->target, 0)->format = VIR_STORAGE_POOL_LOGICAL_LVM2;
+        backingStore->format = VIR_STORAGE_POOL_LOGICAL_LVM2;
     }
 
     if (!vol->key && VIR_STRDUP(vol->key, groups[2]) < 0)
