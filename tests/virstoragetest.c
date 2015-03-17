@@ -403,7 +403,7 @@ testStorageChain(const void *args)
         }
         VIR_FREE(expect);
         VIR_FREE(actual);
-        elt = elt->backingStore;
+        elt = virStorageSourceGetBackingStore(elt, 0);
         i++;
     }
     if (i != data->nfiles) {
@@ -1044,8 +1044,8 @@ mymain(void)
         ret = -1;
         goto cleanup;
     }
-    chain2 = chain->backingStore;
-    chain3 = chain2->backingStore;
+    chain2 = virStorageSourceGetBackingStore(chain, 0);
+    chain3 = virStorageSourceGetBackingStore(chain2, 0);
 
 #define TEST_LOOKUP_TARGET(id, target, from, name, index, result,       \
                            meta, parent)                                \
@@ -1110,8 +1110,8 @@ mymain(void)
         ret = -1;
         goto cleanup;
     }
-    chain2 = chain->backingStore;
-    chain3 = chain2->backingStore;
+    chain2 = virStorageSourceGetBackingStore(chain, 0);
+    chain3 = virStorageSourceGetBackingStore(chain2, 0);
 
     TEST_LOOKUP(28, NULL, "bogus", NULL, NULL, NULL);
     TEST_LOOKUP(29, chain, "bogus", NULL, NULL, NULL);
@@ -1157,8 +1157,8 @@ mymain(void)
         ret = -1;
         goto cleanup;
     }
-    chain2 = chain->backingStore;
-    chain3 = chain2->backingStore;
+    chain2 = virStorageSourceGetBackingStore(chain, 0);
+    chain3 = virStorageSourceGetBackingStore(chain2, 0);
 
     TEST_LOOKUP(56, NULL, "bogus", NULL, NULL, NULL);
     TEST_LOOKUP(57, NULL, "sub/link2", chain->path, chain, NULL);

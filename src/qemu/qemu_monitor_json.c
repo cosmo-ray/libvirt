@@ -3894,7 +3894,9 @@ qemuMonitorJSONDiskNameLookupOne(virJSONValuePtr image,
         return NULL;
     if (top != target) {
         backing = virJSONValueObjectGet(image, "backing-image");
-        return qemuMonitorJSONDiskNameLookupOne(backing, top->backingStore,
+        virStorageSourcePtr backingStore =
+            virStorageSourceGetBackingStore(top, 0);
+        return qemuMonitorJSONDiskNameLookupOne(backing, backingStore,
                                                 target);
     }
     if (VIR_STRDUP(ret, virJSONValueObjectGetString(image, "filename")) < 0)

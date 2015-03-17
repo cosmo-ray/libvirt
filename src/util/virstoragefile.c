@@ -1076,10 +1076,10 @@ virStorageFileChainGetBroken(virStorageSourcePtr chain,
     if (!chain)
         return 0;
 
-    for (tmp = chain; tmp; tmp = tmp->backingStore) {
+    for (tmp = chain; tmp; tmp = virStorageSourceGetBackingStore(tmp, 0)) {
         /* Break when we hit end of chain; report error if we detected
          * a missing backing file, infinite loop, or other error */
-        if (!tmp->backingStore && tmp->backingStoreRaw) {
+        if (!virStorageSourceGetBackingStore(tmp, 0) && tmp->backingStoreRaw) {
             if (VIR_STRDUP(*brokenFile, tmp->backingStoreRaw) < 0)
                 return -1;
 
@@ -1334,8 +1334,8 @@ virStorageFileChainLookup(virStorageSourcePtr chain,
     *parent = NULL;
 
     if (startFrom) {
-        while (chain && chain != startFrom->backingStore) {
-            chain = chain->backingStore;
+        while (chain && chain != virStorageSourceGetBackingStore(startFrom, 0)) {
+            chain = virStorageSourceGetBackingStore(chain, 0);
             i++;
         }
 
@@ -1352,7 +1352,7 @@ virStorageFileChainLookup(virStorageSourcePtr chain,
 
     while (chain) {
         if (!name && !idx) {
-            if (!chain->backingStore)
+            if (!virStorageSourceGetBackingStore(chain, 0))
                 break;
         } else if (idx) {
             VIR_DEBUG("%zu: %s", i, chain->path);
@@ -1387,7 +1387,7 @@ virStorageFileChainLookup(virStorageSourcePtr chain,
             }
         }
         *parent = chain;
-        chain = chain->backingStore;
+        chain = virStorageSourceGetBackingStore(chain, 0);
         i++;
     }
 
@@ -1891,8 +1891,8 @@ virStorageSourceCopy(const virStorageSource *src,
         !(ret->auth = virStorageAuthDefCopy(src->auth)))
         goto error;
 
-    if (backingChain && src->backingStore) {
-        if (!(ret->backingStore = virStorageSourceCopy(src->backingStore,
+    if (backingChain && virStorageSourceGetBackingStore(src, 0)) {
+        if (!(ret->backingStore = virStorageSourceCopy(virStorageSourceGetBackingStore(src, 0),
                                                        true)))
             goto error;
     }
@@ -2033,7 +2033,7 @@ virStorageSourceBackingStoreClear(virStorageSourcePtr def)
     VIR_FREE(def->backingStoreRaw);
 
     /* recursively free backing chain */
-    virStorageSourceFree(def->backingStore);
+    virStorageSourceFree(virStorageSourceGetBackingStore(def, 0));
     def->backingStore = NULL;
 }
 
@@ -2855,7 +2855,7 @@ virStorageFileGetRelativeBackingPath(virStorageSourcePtr top,
 
     *relpath = NULL;
 
-    for (next = top; next; next = next->backingStore) {
+    for (next = top; next; next = virStorageSourceGetBackingStore(next, 0)) {
         if (!next->relPath) {
             ret = 1;
             goto cleanup;

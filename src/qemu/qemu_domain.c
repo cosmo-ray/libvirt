@@ -2807,7 +2807,7 @@ qemuDomainDetermineDiskChain(virQEMUDriverPtr driver,
     if (virStorageSourceIsEmpty(disk->src))
         goto cleanup;
 
-    if (disk->src->backingStore) {
+    if (virStorageSourceGetBackingStore(disk->src, 0)) {
         if (force_probe)
             virStorageSourceBackingStoreClear(disk->src);
         else
