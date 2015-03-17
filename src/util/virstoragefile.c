@@ -1817,6 +1817,16 @@ virStorageSourceGetBackingStore(const virStorageSource *src,
 }
 
 
+bool
+virStorageSourceSetBackingStore(virStorageSourcePtr src,
+                                virStorageSourcePtr backingStore,
+                                size_t pos ATTRIBUTE_UNUSED)
+{
+    src->backingStore = backingStore;
+    return !!src->backingStore;
+}
+
+
 /**
  * virStorageSourcePtr:
  *
