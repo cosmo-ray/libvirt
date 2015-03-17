@@ -121,7 +121,7 @@ qemuSetupDiskCgroup(virDomainObjPtr vm,
     virStorageSourcePtr next;
     bool forceReadonly = false;
 
-    for (next = disk->src; next; next = next->backingStore) {
+    for (next = disk->src; next; next = virStorageSourceGetBackingStore(next, 0)) {
         if (qemuSetImageCgroupInternal(vm, next, false, forceReadonly) < 0)
             return -1;
 
@@ -139,7 +139,7 @@ qemuTeardownDiskCgroup(virDomainObjPtr vm,
 {
     virStorageSourcePtr next;
 
-    for (next = disk->src; next; next = next->backingStore) {
+    for (next = disk->src; next; next = virStorageSourceGetBackingStore(next, 0)) {
         if (qemuSetImageCgroup(vm, next, true) < 0)
             return -1;
     }

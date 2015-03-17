@@ -14300,13 +14300,13 @@ qemuDomainSnapshotUndoSingleDiskActive(virQEMUDriverPtr driver,
 
     /* Update vm in place to match changes. */
     tmp = disk->src;
-    disk->src = tmp->backingStore;
+    disk->src = virStorageSourceGetBackingStore(tmp, 0);
     tmp->backingStore = NULL;
     virStorageSourceFree(tmp);
 
     if (persistDisk) {
         tmp = persistDisk->src;
-        persistDisk->src = tmp->backingStore;
+        persistDisk->src = virStorageSourceGetBackingStore(tmp, 0);
         tmp->backingStore = NULL;
         virStorageSourceFree(tmp);
     }
@@ -16316,7 +16316,7 @@ qemuDomainBlockPullCommon(virQEMUDriverPtr driver,
                 goto endjob;
             }
 
-            if (virStorageFileGetRelativeBackingPath(disk->src->backingStore,
+            if (virStorageFileGetRelativeBackingPath(virStorageSourceGetBackingStore(disk->src, 0),
                                                      baseSource,
                                                      &backingPath) < 0)
                 goto endjob;
@@ -16680,6 +16680,7 @@ qemuDomainBlockCopyCommon(virDomainObjPtr vm,
     virQEMUDriverConfigPtr cfg = NULL;
     const char *format = NULL;
     int desttype = virStorageSourceGetActualType(mirror);
+    virStorageSourcePtr backingStore;
 
     /* Preliminaries: find the disk we are editing, sanity checks */
     virCheckFlags(VIR_DOMAIN_BLOCK_COPY_SHALLOW |
@@ -16723,9 +16724,10 @@ qemuDomainBlockCopyCommon(virDomainObjPtr vm,
     if (qemuDomainDetermineDiskChain(driver, vm, disk, false, true) < 0)
         goto endjob;
 
+    backingStore = virStorageSourceGetBackingStore(disk->src, 0);
     if ((flags & VIR_DOMAIN_BLOCK_COPY_SHALLOW) &&
         mirror->format == VIR_STORAGE_FILE_RAW &&
-        disk->src->backingStore->path) {
+        backingStore->path) {
         virReportError(VIR_ERR_CONFIG_UNSUPPORTED,
                        _("disk '%s' has backing file, so raw shallow copy "
                          "is not possible"),
@@ -17125,7 +17127,7 @@ qemuDomainBlockCommit(virDomainPtr dom,
         goto endjob;
     }
 
-    if (!topSource->backingStore) {
+    if (!virStorageSourceGetBackingStore(topSource, 0)) {
         virReportError(VIR_ERR_INVALID_ARG,
                        _("top '%s' in chain for '%s' has no backing file"),
                        topSource->path, path);
@@ -17133,14 +17135,14 @@ qemuDomainBlockCommit(virDomainPtr dom,
     }
 
     if (!base && (flags & VIR_DOMAIN_BLOCK_COMMIT_SHALLOW))
-        baseSource = topSource->backingStore;
+        baseSource = virStorageSourceGetBackingStore(topSource, 0);
     else if (virStorageFileParseChainIndex(disk->dst, base, &baseIndex) < 0 ||
              !(baseSource = virStorageFileChainLookup(disk->src, topSource,
                                                       base, baseIndex, NULL)))
         goto endjob;
 
     if ((flags & VIR_DOMAIN_BLOCK_COMMIT_SHALLOW) &&
-        baseSource != topSource->backingStore) {
+        baseSource != virStorageSourceGetBackingStore(topSource, 0)) {
         virReportError(VIR_ERR_INVALID_ARG,
                        _("base '%s' is not immediately below '%s' in chain "
                          "for '%s'"),
@@ -19400,7 +19402,7 @@ qemuDomainGetStatsBlock(virQEMUDriverPtr driver,
                 goto cleanup;
             visited++;
             backing_idx++;
-            src = src->backingStore;
+            src = virStorageSourceGetBackingStore(src, 0);
         }
     }
 
