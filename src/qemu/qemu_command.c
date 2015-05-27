@@ -320,6 +320,7 @@ static int qemuCreateInBridgePortWithHelper(virQEMUDriverConfigPtr cfg,
         goto cleanup;
     }
 
+    VIR_ERROR("qemuCreateInBridgePortWithHelper");
     if (virNetDevTapGetName(*tapfd, ifname) < 0 ||
         virCommandWait(cmd, NULL) < 0) {
         VIR_FORCE_CLOSE(*tapfd);

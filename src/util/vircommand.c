@@ -2193,6 +2193,7 @@ virCommandRun(virCommandPtr cmd, int *exitstatus)
     char *str;
     int tmpfd;
 
+    VIR_ERROR("virCommandRun");
     if (!cmd ||cmd->has_error == ENOMEM) {
         virReportOOMError();
         return -1;
@@ -2490,6 +2491,7 @@ virCommandWait(virCommandPtr cmd, int *exitstatus)
     int ret;
     int status = 0;
 
+    VIR_ERROR("virCommandWait");
     if (!cmd ||cmd->has_error == ENOMEM) {
         virReportOOMError();
         return -1;
@@ -2535,6 +2537,7 @@ virCommandWait(virCommandPtr cmd, int *exitstatus)
             ret = -1;
         }
     }
+    VIR_ERROR("cmd %s", virCommandToString(cmd));
     if (ret == 0) {
         cmd->pid = -1;
         cmd->reap = false;

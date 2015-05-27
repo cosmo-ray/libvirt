@@ -439,6 +439,99 @@ disksorter(const void *a, const void *b)
     return diska->idx - diskb->idx;
 }
 
+
+/**
+ * @return the number of backing store and "sub backingstore"
+ */
+static size_t
+countBackingStore(virStorageSourcePtr src)
+{
+    int i;
+    int ret = 0;
+
+    if (!virStorageSourceIsContener(src))
+        return 0;
+    for (i = 0; i < src->nBackingStores; ++i) {
+        virStorageSourcePtr child = virStorageSourceGetBackingStore(src, i);
+
+        if (virStorageSourceIsContener(child))
+            ret += countBackingStore(child);
+        else                
+            ret += 1;
+    }
+    return ret;
+}
+
+static size_t
+totalSnapshotableDisks(virDomainDefPtr dom)
+{
+    int i;
+    int ret = 0;
+
+    for (i = 0; i < dom->ndisks; ++i) {
+        if (dom->disks[i]->src &&
+            virStorageSourceIsContener(dom->disks[i]->src)) {
+            ret += countBackingStore(dom->disks[i]->src);
+        } else {
+            ret += 1;
+        }
+    }
+
+    return ret;
+}
+
+static void
+incrementIdx(virDomainDefPtr dom, size_t *disk_idk,
+                         size_t *child_idx)
+{
+    if (!dom->disks[*disk_idk]->src) {
+        *disk_idk = *disk_idk + 1;
+        return;
+    }
+
+    if (virStorageSourceIsContener(dom->disks[*disk_idk]->src)) {
+        if ((*child_idx + 1) < countBackingStore(dom->disks[*disk_idk]->src)) {
+            *child_idx = *child_idx + 1;
+        } else {
+            *child_idx = 0;
+            *disk_idk = *disk_idk + 1;
+        }
+    } else {
+        *disk_idk = *disk_idk + 1;
+    }
+}
+
+static virStorageSourcePtr
+quorumGetChild(virStorageSourcePtr src, size_t idx)
+{
+    size_t i, j;
+    size_t deep = 0;
+    virStorageSourcePtr lasts[12];
+    size_t lastIdx[12];
+    virStorageSourcePtr cur = src;
+
+    for (i = 0, j = 0; ; ++i, ++j) {
+        /* VIR_ERROR("i: %lu, j:%lu", i, j); */
+        if (virStorageSourceIsContener(cur->backingStores[i])) {
+            /* VIR_ERROR("cnt: %lu", cur->nBackingStores); */
+            lastIdx[deep] = i;
+            i = 0;
+            lasts[deep] = cur;
+            cur = cur->backingStores[i];
+            ++deep;
+        }
+        if (j == idx)
+            return (cur->backingStores[i]);
+        if (i == cur->nBackingStores - 1) {
+            if (cur == src || deep == 0)
+                return NULL;
+            --deep;
+            cur = lasts[deep];
+            i = lastIdx[deep];
+        }
+    }
+}
+
 /* Align def->disks to def->domain.  Sort the list of def->disks,
  * filling in any missing disks or snapshot state defaults given by
  * the domain, with a fallback to a passed in default.  Convert paths
@@ -455,6 +548,7 @@ virDomainSnapshotAlignDisks(virDomainSnapshotDefPtr def,
     virBitmapPtr map = NULL;
     size_t i;
     int ndisks;
+    size_t total_disks;
 
     if (!def->dom) {
         virReportError(VIR_ERR_INTERNAL_ERROR, "%s",
@@ -474,7 +568,9 @@ virDomainSnapshotAlignDisks(virDomainSnapshotDefPtr def,
         goto cleanup;
     }
 
-    if (!(map = virBitmapNew(def->dom->ndisks)))
+    total_disks = totalSnapshotableDisks(def->dom);
+
+    if (!(map = virBitmapNew(total_disks)))
         goto cleanup;
 
     /* Double check requested disks.  */
@@ -497,7 +593,9 @@ virDomainSnapshotAlignDisks(virDomainSnapshotDefPtr def,
         }
         ignore_value(virBitmapSetBit(map, idx));
         disk->idx = idx;
+        VIR_ERROR("idx %d, name %s", idx, disk->name);
 
+        // Patch for quorum here
         disk_snapshot = def->dom->disks[idx]->snapshot;
         if (!disk->snapshot) {
             if (disk_snapshot &&
@@ -535,16 +633,23 @@ virDomainSnapshotAlignDisks(virDomainSnapshotDefPtr def,
 
     /* Provide defaults for all remaining disks.  */
     ndisks = def->ndisks;
+    VIR_ERROR("let go Genkiganger %lu - %lu - %lu", def->ndisks,
+              def->dom->ndisks, total_disks);
     if (VIR_EXPAND_N(def->disks, def->ndisks,
-                     def->dom->ndisks - def->ndisks) < 0)
+                     total_disks - def->ndisks) < 0)
         goto cleanup;
 
-    for (i = 0; i < def->dom->ndisks; i++) {
+    size_t child_idx;
+    size_t total_idx;
+    for (i = 0 ,child_idx = 0, total_idx = ndisks;
+         total_idx < total_disks;
+         incrementIdx(def->dom, &i, &child_idx), ++total_idx) {
         virDomainSnapshotDiskDefPtr disk;
 
-        if (virBitmapIsBitSet(map, i))
+        if (virBitmapIsBitSet(map, i)) {
             continue;
-        disk = &def->disks[ndisks++];
+        }
+        disk = &def->disks[total_idx];
         if (VIR_ALLOC(disk->src) < 0)
             goto cleanup;
         if (VIR_STRDUP(disk->name, def->dom->disks[i]->dst) < 0)
@@ -552,7 +657,8 @@ virDomainSnapshotAlignDisks(virDomainSnapshotDefPtr def,
         disk->idx = i;
 
         /* Don't snapshot empty drives */
-        if (virStorageSourceIsEmpty(def->dom->disks[i]->src))
+        if (virStorageSourceIsEmpty(def->dom->disks[i]->src) &&
+            !virStorageSourceIsContener(def->dom->disks[i]->src))
             disk->snapshot = VIR_DOMAIN_SNAPSHOT_LOCATION_NONE;
         else
             disk->snapshot = def->dom->disks[i]->snapshot;
@@ -564,59 +670,82 @@ virDomainSnapshotAlignDisks(virDomainSnapshotDefPtr def,
 
     qsort(&def->disks[0], def->ndisks, sizeof(def->disks[0]), disksorter);
 
+    VIR_ERROR("let's Volt %lu", def->ndisks);
+    /* TODO Quorum work should be here :) */
+    /* TODO: disk iterator */
     /* Generate any default external file names, but only if the
      * backing file is a regular file.  */
-    for (i = 0; i < def->ndisks; i++) {
-        virDomainSnapshotDiskDefPtr disk = &def->disks[i];
+    int j;
+    for (i = 0, j = 0; i < def->dom->ndisks; i++) {
+        virDomainSnapshotDiskDefPtr disk;
+        int begin = j;
+        int nb_child = countBackingStore(def->dom->disks[i]->src);
 
-        if (disk->snapshot == VIR_DOMAIN_SNAPSHOT_LOCATION_EXTERNAL &&
-            !disk->src->path) {
-            const char *original = virDomainDiskGetSource(def->dom->disks[i]);
-            const char *tmp;
-            struct stat sb;
+        do {
+            disk = &def->disks[j];
+            if (disk->snapshot == VIR_DOMAIN_SNAPSHOT_LOCATION_EXTERNAL &&
+                !disk->src->path) {
+                /*TODO use disk_idx instead of x(and hope i think a way now =)*/
+                const char *original;
+                const char *tmp;
+                struct stat sb;
 
-            if (disk->src->type != VIR_STORAGE_TYPE_FILE) {
-                virReportError(VIR_ERR_CONFIG_UNSUPPORTED,
-                               _("cannot generate external snapshot name "
-                                 "for disk '%s' on a '%s' device"),
-                               disk->name,
-                               virStorageTypeToString(disk->src->type));
-                goto cleanup;
-            }
+                if (virStorageSourceIsContener(def->dom->disks[i]->src)) {
+                    virStorageSourcePtr child;
 
-            if (!original) {
-                virReportError(VIR_ERR_CONFIG_UNSUPPORTED,
-                               _("cannot generate external snapshot name "
-                                 "for disk '%s' without source"),
-                               disk->name);
-                goto cleanup;
-            }
-            if (stat(original, &sb) < 0 || !S_ISREG(sb.st_mode)) {
-                virReportError(VIR_ERR_CONFIG_UNSUPPORTED,
-                               _("source for disk '%s' is not a regular "
-                                 "file; refusing to generate external "
-                                 "snapshot name"),
-                               disk->name);
-                goto cleanup;
-            }
-
-            tmp = strrchr(original, '.');
-            if (!tmp || strchr(tmp, '/')) {
-                if (virAsprintf(&disk->src->path, "%s.%s", original,
-                                def->name) < 0)
-                    goto cleanup;
-            } else {
-                if ((tmp - original) > INT_MAX) {
-                    virReportError(VIR_ERR_INTERNAL_ERROR, "%s",
-                                   _("integer overflow"));
+                    child = quorumGetChild(def->dom->disks[i]->src, j - begin);
+                    if (child == NULL)
+                        return -1;
+                    original = child->path;
+                } else {
+                    original = virDomainDiskGetSource(def->dom->disks[i]);
+                }
+                VIR_ERROR("hello %s", original);
+                /* TODO: check if contener here */
+                if (disk->src->type != VIR_STORAGE_TYPE_FILE) {
+                    virReportError(VIR_ERR_CONFIG_UNSUPPORTED,
+                                   _("cannot generate external snapshot name "
+                                     "for disk '%s' on a '%s' device"),
+                                   disk->name,
+                                   virStorageTypeToString(disk->src->type));
                     goto cleanup;
                 }
-                if (virAsprintf(&disk->src->path, "%.*s.%s",
-                                (int) (tmp - original), original,
-                                def->name) < 0)
+
+                if (!original) {
+                    virReportError(VIR_ERR_CONFIG_UNSUPPORTED,
+                                   _("cannot generate external snapshot name "
+                                     "for disk '%s' without source"),
+                                   disk->name);
                     goto cleanup;
+                }
+                if (stat(original, &sb) < 0 || !S_ISREG(sb.st_mode)) {
+                    virReportError(VIR_ERR_CONFIG_UNSUPPORTED,
+                                   _("source for disk '%s' is not a regular "
+                                     "file; refusing to generate external "
+                                     "snapshot name"),
+                                   disk->name);
+                    goto cleanup;
+                }
+
+                tmp = strrchr(original, '.');
+                if (!tmp || strchr(tmp, '/')) {
+                    if (virAsprintf(&disk->src->path, "%s.%s", original,
+                                    def->name) < 0)
+                        goto cleanup;
+                } else {
+                    if ((tmp - original) > INT_MAX) {
+                        virReportError(VIR_ERR_INTERNAL_ERROR, "%s",
+                                       _("integer overflow"));
+                        goto cleanup;
+                    }
+                    if (virAsprintf(&disk->src->path, "%.*s.%s",
+                                    (int) (tmp - original), original,
+                                    def->name) < 0)
+                        goto cleanup;
+                }
             }
-        }
+            ++j;
+        } while (j <  begin + nb_child);
     }
 
     ret = 0;

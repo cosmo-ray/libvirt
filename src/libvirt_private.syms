@@ -2117,6 +2117,7 @@ virStorageSourceGetActualType;
 virStorageSourceGetBackingStore;
 virStorageSourceGetSecurityLabelDef;
 virStorageSourceInitChainElement;
+virStorageSourceIsContener;
 virStorageSourceIsEmpty;
 virStorageSourceIsLocalStorage;
 virStorageSourceNewFromBacking;

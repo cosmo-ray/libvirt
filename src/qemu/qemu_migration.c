@@ -5356,6 +5356,7 @@ qemuMigrationToFile(virQEMUDriverPtr driver, virDomainObjPtr vm,
     char *errbuf = NULL;
     virErrorPtr orig_err = NULL;
 
+    VIR_ERROR("qemuMigrationToFile");
     /* Increase migration bandwidth to unlimited since target is a file.
      * Failure to change migration speed is not fatal. */
     if (qemuDomainObjEnterMonitorAsync(driver, vm, asyncJob) == 0) {

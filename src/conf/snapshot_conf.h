@@ -52,6 +52,7 @@ struct _virDomainSnapshotDiskDef {
     int idx;        /* index within snapshot->dom->disks that matches name */
     int snapshot;   /* virDomainSnapshotLocation */
 
+    size_t childs;
     /* details of wrapper external file. src is always non-NULL.
      * XXX optimize this to allow NULL for internal snapshots? */
     virStorageSourcePtr src;
